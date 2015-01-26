@@ -1,0 +1,210 @@
+Practical Machine Learning Course Project
+========================================================
+
+Introduction
+------------
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is  to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here:  [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
+
+
+Loading
+------------
+
+
+The data for this project are available:
+
+- Training data [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) 
+
+- Tests data [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) 
+
+Once the files have been downloaded into the working directory, the next script loads them in *training* and *test*. The script also includes the required libraries.
+
+```{r, eval=FALSE}
+library(caret)
+library(parallel)
+library(doParallel)
+
+#raw data load step 
+
+training <- read.csv("pml-training.csv", header = TRUE)
+testing  <- read.csv('pml-testing.csv')
+
+```
+
+
+
+Cleaning 
+------------
+Once the training data summary has been analyzed the following cleaning actions are applied:
+- Near zero variance predictors removed
+- The columns with not number over a 90% removed
+- Columns considered as not relevant for classification removed(x, user name, raw time stamp 1 and 2, new window and num window).
+- Class has been transformed into factor
+
+```{r, eval=FALSE}
+
+#The columns with not number over a 90% removed
+
+nasPerCol <- apply(training,2,function(x) {sum(is.na(x))});
+training  <- training[,which(nasPerCol <  nrow(training)*0.9)];  
+  
+#Near zero variance predictors removed
+
+nearZeroCol <- nearZeroVar(training, saveMetrics = TRUE)
+training <- training[, nearZeroCol$nzv==FALSE]
+  
+#Columns considered as not relevant for classification removed
+#(x, user_name, raw time stamp 1  and 2, "new_window" and "num_window")
+
+training<-training[,7:ncol(training)]
+  
+#class as factor
+
+training$classe <- factor(training$classe)
+```
+
+
+Splitting
+------------
+Split of the data: 60% for training, 40% for testing
+
+```{r, eval=FALSE}
+
+trainIndex <- createDataPartition(y = training$classe, p=0.6,list=FALSE);
+trainingPartition <- training[trainIndex,];
+testingPartition <- training[-trainIndex,];
+
+```
+
+Machine learning models
+------------
+3 models generated:  
+
+- random forest ("rf")
+
+- boosted trees ("gbm") 
+
+- linear discriminant analysis ("lda") model. 
+
+The Principal Component Analysis (PCA) can be added at the train function preprocess options, however it can create a lose of accuracy. The parallel computing methods are added in order to improve the efficiency. 
+
+```{r, eval=FALSE}
+
+#random seed
+
+set.seed(2423)
+
+#parallel computing for multi-core
+
+registerDoParallel(makeCluster(detectCores()))
+
+#three models are generated:  
+
+#random forest   ("rf"), 
+
+model_rf <- train(classe ~ .,  method="rf", data=trainingPartition)    
+
+#boosted trees ("gbm")
+
+model_gbm <-train(classe ~ ., method = 'gbm', data = trainingPartition)
+
+#linear discriminant analysis ("lda") model   
+
+model_lda <-train(classe ~ ., method = 'lda', data = trainingPartition) 
+```
+
+
+Accuracy
+------------
+Once employed the testing data to perform the predictions with the models already calculated and created each model's confusion matrix; the accuracy returned is: 
+
+- random forest 99%
+
+- boosted trees 96%
+
+- linear discriminant analysis 69%.
+
+Thus, the random forest model has emerged as the most adecuate model to be optimized with cross validation.  Since random forest was the most complex technique evaluated this was the expected output because it employs a combination of different classifiers. 
+
+```{r, eval=FALSE}
+print("Random forest accuracy ")
+rf_accuracy<- predict(model_rf, testingPartition)
+print(confusionMatrix(rf_accuracy, testingPartition$classe))
+print("Boosted trees accuracy ")
+gbm_accuracy<- predict(model_gbm , testingPartition)
+print(confusionMatrix(gbm_accuracy, testingPartition$classe))
+print("Linear discriminant analysis")
+lda_accuracy<- predict(model_lda , testingPartition)
+print(confusionMatrix(lda_accuracy, testingPartition$classe))
+```
+
+Cross validation
+------------
+In order to avoid over-fitting at the generated model it is employed the cross validation technique using 10 folds.
+
+```{r, eval=FALSE}
+
+#random seed
+
+set.seed(2423)
+
+#parallel computing for multi-core
+
+registerDoParallel(makeCluster(detectCores()))  
+
+controlf <- trainControl(method = "repeatedcv", number = 10, repeats = 10)
+model_rf_CV <- train(classe ~ ., method="rf",  data=trainingPartition, trControl = controlf)
+```
+
+
+
+The final accuracy of the model with cross validation is also obtained:
+
+```{r, eval=FALSE}
+print("Random forest accuracy after CV")
+rf_CV_accuracy<<- predict(model_rf_CV , testingPartition)
+print(confusionMatrix(rf_CV_accuracy, testingPartition$classe))
+```
+
+The accuracy is around 0.9921, this is only a little more better than the baseline accuracy (0.9916) which was already a high value. 
+
+
+Variables
+------------
+Considering the final model it is evident that *roll_belt* can be considered as the most important predictor for the model obtained with random forest and tuned by cross validation.
+
+
+```{r, eval=FALSE}
+print("Variables importance at the model")
+vi = varImp(model_rf_CV$finalModel)
+vi$var<-rownames(vi)
+vi = as.data.frame(vi[with(vi, order(vi$Overall, decreasing=TRUE)), ])
+rownames(vi) <- NULL
+print(vi)
+```
+
+
+
+20 test cases prediction
+------------
+The random forest model tuned with cross validation (model_rf_CV) is used to predict  20 test cases available in the test data loaded at the beginning of the project.
+
+```{r, eval=FALSE}
+pml_create_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+
+#Prediction Assignment Submission
+predictionassignmet<- function(){
+  prediction <- predict(model_rf_CV, test)
+  print(prediction)
+  answers <- as.vector(prediction)
+  pml_create_files(answers)
+}
+
+```
+
