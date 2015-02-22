@@ -72,8 +72,17 @@ library(doParallel)
 
 #raw data load step 
 
-training &lt;- read.csv(&quot;pml-training.csv&quot;, header = TRUE)
-testing  &lt;- read.csv('pml-testing.csv')</code></pre>
+if(!file.exists('pml-training.csv')){
+  training &lt;- read.csv(url('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'))
+  write.csv(training,'pml-training.csv')
+}else
+  training &lt;- read.csv('pml-training.csv', header = TRUE)  
+
+if(!file.exists('pml-testing.csv')){
+  testing &lt;- read.csv(url('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'))
+  write.csv(testing,'pml-testing.csv')
+}else
+  testing  &lt;- read.csv('pml-testing.csv')</code></pre>
 </div>
 <div id="cleaning" class="section level2">
 <h2>Cleaning</h2>
@@ -196,12 +205,14 @@ print(vi)</code></pre>
 
 
 #Prediction Assignment Submission
-predictionassignmet&lt;- function(){
-  prediction &lt;- predict(model_rf_CV, test)
+predictionassign&lt;- function(){
+  prediction &lt;- predict(model_rf_CV, testing)
   print(prediction)
   answers &lt;- as.vector(prediction)
   pml_create_files(answers)
-}</code></pre>
+}
+
+predictionassign()</code></pre>
 </div>
 </div>
 

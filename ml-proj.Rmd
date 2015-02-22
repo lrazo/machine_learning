@@ -25,8 +25,17 @@ library(doParallel)
 
 #raw data load step 
 
-training <- read.csv("pml-training.csv", header = TRUE)
-testing  <- read.csv('pml-testing.csv')
+if(!file.exists('pml-training.csv')){
+  training <- read.csv(url('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'))
+  write.csv(training,'pml-training.csv')
+}else
+  training <- read.csv('pml-training.csv', header = TRUE)  
+
+if(!file.exists('pml-testing.csv')){
+  testing <- read.csv(url('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'))
+  write.csv(testing,'pml-testing.csv')
+}else
+  testing  <- read.csv('pml-testing.csv')
 
 ```
 
@@ -199,12 +208,14 @@ pml_create_files = function(x){
 
 
 #Prediction Assignment Submission
-predictionassignmet<- function(){
-  prediction <- predict(model_rf_CV, test)
+predictionassign<- function(){
+  prediction <- predict(model_rf_CV, testing)
   print(prediction)
   answers <- as.vector(prediction)
   pml_create_files(answers)
 }
+
+predictionassign()
 
 ```
 
